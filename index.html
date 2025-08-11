@@ -47,6 +47,12 @@
             font-weight: bold;
             color: #f1c40f;
         }
+
+        #level {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2ecc71;
+        }
     </style>
 </head>
 <body>
@@ -58,6 +64,8 @@
             <canvas id="next" width="80" height="80"></canvas>
             <h2>점수</h2>
             <div id="score">0</div>
+            <h2>레벨</h2>
+            <div id="level">0</div>
         </div>
     </div>
 
@@ -67,6 +75,7 @@
         const nextCanvas = document.getElementById('next');
         const nextContext = nextCanvas.getContext('2d');
         const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
 
         const ROWS = 20;
         const COLS = 12;
@@ -96,7 +105,8 @@
             score: 0,
         };
         let nextPiece = null;
-        let linesCleared = 0; // 없앤 줄 수를 기록할 변수
+        let linesCleared = 0;
+        let level = 0; // 레벨 변수
 
         function createBoard() {
             return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
@@ -117,9 +127,11 @@
             if (collide(board, player)) {
                 board.forEach(row => row.fill(0));
                 player.score = 0;
-                linesCleared = 0; // 게임 오버 시 없앤 줄 수 초기화
-                dropInterval = 1000; // 게임 오버 시 속도 초기화
+                linesCleared = 0;
+                level = 0;
+                dropInterval = 1000;
                 updateScore();
+                updateLevel();
                 alert("게임 오버!");
             }
         }
@@ -223,7 +235,6 @@
                     [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
                 }
             }
-
             if (dir > 0) {
                 matrix.forEach(row => row.reverse());
             } else {
@@ -249,30 +260,26 @@
         function arenaSweep() {
             let clearedThisTurn = 0;
             let rowCount = 1;
-            outer: for (let y = board.length - 1; y > -1; --y) {
-                // .every()를 사용해 해당 줄의 모든 칸이 채워졌는지 확인
+            for (let y = board.length - 1; y >= 0; --y) {
                 if (board[y].every(value => value !== 0)) {
                     const row = board.splice(y, 1)[0].fill(0);
                     board.unshift(row);
-                    y++; // 줄을 삭제했으므로 인덱스를 보정
-
+                    y++;
                     clearedThisTurn++;
                     player.score += rowCount * 10;
                     rowCount *= 2;
                 }
             }
-
             if (clearedThisTurn > 0) {
-                const previousLevel = Math.floor(linesCleared / 10);
+                const prevLevel = Math.floor(linesCleared / 10);
                 linesCleared += clearedThisTurn;
-                const currentLevel = Math.floor(linesCleared / 10);
-                
-                // 레벨이 올랐는지 확인 (예: 8줄 -> 12줄이 되면 레벨 0 -> 1)
-                if (currentLevel > previousLevel) {
-                    const levelsGained = currentLevel - previousLevel;
-                    for (let i = 0; i < levelsGained; i++) {
-                        dropInterval *= 0.95; // 5%씩 속도 증가 (시간 간격 감소)
+                const newLevel = Math.floor(linesCleared / 10);
+                if (newLevel > prevLevel) {
+                    level = newLevel;
+                    for (let i = 0; i < (newLevel - prevLevel); i++) {
+                        dropInterval *= 0.95;
                     }
+                    updateLevel();
                 }
             }
         }
@@ -281,19 +288,21 @@
             scoreElement.innerText = player.score;
         }
 
+        function updateLevel() {
+            levelElement.innerText = level;
+        }
+
         let dropCounter = 0;
-        let dropInterval = 1000; // 초기 속도 (1초)
+        let dropInterval = 1000;
         let lastTime = 0;
 
         function update(time = 0) {
             const deltaTime = time - lastTime;
             lastTime = time;
-
             dropCounter += deltaTime;
             if (dropCounter > dropInterval) {
                 playerDrop();
             }
-
             draw();
             requestAnimationFrame(update);
         }
@@ -306,7 +315,7 @@
             } else if (event.key === 'ArrowDown') {
                 playerDrop();
             } else if (event.key === ' ' || event.code === 'Space') {
-                 event.preventDefault(); // 스페이스바의 기본 동작(스크롤) 방지
+                 event.preventDefault();
                  playerHardDrop();
             } else if (event.key === 'q' || event.key === 'Q') {
                 playerRotate(-1);
@@ -315,10 +324,11 @@
             }
         });
         
-        // --- 게임 시작 ---
+        // 게임 시작
         nextPiece = createPiece();
         playerReset();
         updateScore();
+        updateLevel();
         update();
     </script>
 </body>
