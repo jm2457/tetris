@@ -96,6 +96,7 @@
             score: 0,
         };
         let nextPiece = null;
+        let linesCleared = 0; // 없앤 줄 수를 기록할 변수
 
         function createBoard() {
             return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
@@ -116,6 +117,8 @@
             if (collide(board, player)) {
                 board.forEach(row => row.fill(0));
                 player.score = 0;
+                linesCleared = 0; // 게임 오버 시 없앤 줄 수 초기화
+                dropInterval = 1000; // 게임 오버 시 속도 초기화
                 updateScore();
                 alert("게임 오버!");
             }
@@ -244,20 +247,33 @@
         }
 
         function arenaSweep() {
+            let clearedThisTurn = 0;
             let rowCount = 1;
             outer: for (let y = board.length - 1; y > -1; --y) {
-                for (let x = 0; x < board[y].length; ++x) {
-                    if (board[y][x] === 0) {
-                        continue outer;
+                // .every()를 사용해 해당 줄의 모든 칸이 채워졌는지 확인
+                if (board[y].every(value => value !== 0)) {
+                    const row = board.splice(y, 1)[0].fill(0);
+                    board.unshift(row);
+                    y++; // 줄을 삭제했으므로 인덱스를 보정
+
+                    clearedThisTurn++;
+                    player.score += rowCount * 10;
+                    rowCount *= 2;
+                }
+            }
+
+            if (clearedThisTurn > 0) {
+                const previousLevel = Math.floor(linesCleared / 10);
+                linesCleared += clearedThisTurn;
+                const currentLevel = Math.floor(linesCleared / 10);
+                
+                // 레벨이 올랐는지 확인 (예: 8줄 -> 12줄이 되면 레벨 0 -> 1)
+                if (currentLevel > previousLevel) {
+                    const levelsGained = currentLevel - previousLevel;
+                    for (let i = 0; i < levelsGained; i++) {
+                        dropInterval *= 0.95; // 5%씩 속도 증가 (시간 간격 감소)
                     }
                 }
-
-                const row = board.splice(y, 1)[0].fill(0);
-                board.unshift(row);
-                ++y;
-
-                player.score += rowCount * 10;
-                rowCount *= 2;
             }
         }
         
@@ -266,7 +282,7 @@
         }
 
         let dropCounter = 0;
-        let dropInterval = 1000;
+        let dropInterval = 1000; // 초기 속도 (1초)
         let lastTime = 0;
 
         function update(time = 0) {
