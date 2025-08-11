@@ -1,251 +1,524 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>Tetris with Level Dance</title>
-<style>
-  canvas { border: 2px solid black; background: #000; display: block; margin: 0 auto; }
-  #levelDisplay { color: white; font-family: sans-serif; text-align: center; margin-top: 10px; }
-  #curtain {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: black;
-    display: none;
-    z-index: 10;
-    color: white;
-    font-size: 2em;
-    text-align: center;
-    padding-top: 20%;
-  }
-  .puppet {
-    width: 100px;
-    height: 100px;
-    background: url('puppet.png') no-repeat center/contain;
-    display: inline-block;
-    animation: dance 1s infinite;
-  }
-  @keyframes dance {
-    0% { transform: rotate(0deg) translateY(0); }
-    25% { transform: rotate(10deg) translateY(-10px); }
-    50% { transform: rotate(0deg) translateY(0); }
-    75% { transform: rotate(-10deg) translateY(-10px); }
-    100% { transform: rotate(0deg) translateY(0); }
-  }
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTML 테트리스</title>
+    <style>
+        body {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1, h2 { text-align: center; }
+
+        .container {
+            display: flex;
+            align-items: flex-start;
+            border: 3px solid #34495e;
+            padding: 20px;
+            background-color: #34495e;
+            border-radius: 10px;
+        }
+
+        canvas {
+            background-color: #000;
+            border: 2px solid #ecf0f1;
+            display: block;
+        }
+
+        .side-panel {
+            margin-left: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #score { font-size: 2em; font-weight: bold; color: #f1c40f; }
+        #level { font-size: 2em; font-weight: bold; color: #2ecc71; }
+
+        /* 오버레이(커튼 + 인형) 스타일 */
+        .overlay {
+            position: absolute;
+            display: none;
+            z-index: 9999;
+            pointer-events: auto; /* 애니메이션 중 입력 차단 */
+            overflow: hidden;
+        }
+
+        .curtain {
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 50%;
+            background: linear-gradient(180deg, #8b0000 0%, #3b0000 100%);
+            transition: transform 600ms cubic-bezier(.2,.8,.2,1);
+            box-shadow: 0 0 30px rgba(0,0,0,0.6);
+        }
+        .curtain.left  { left: 0;  transform: translateX(0); }
+        .curtain.right { right: 0; transform: translateX(0); }
+        .curtain.open.left  { transform: translateX(-100%); }
+        .curtain.open.right { transform: translateX(100%); }
+
+        .level-label {
+            position: absolute;
+            top: 8%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 18px;
+            font-weight: 700;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+            pointer-events: none;
+        }
+
+        .puppet-container {
+            position: absolute;
+            left: 50%;
+            top: 55%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            gap: 18px;
+            align-items: flex-end;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        /* 간단한 꼭두각시 스타일 (이미지 필요 없음) */
+        .puppet {
+            width: 64px;
+            height: 140px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            transform-origin: center bottom;
+            animation: puppetDance 0.8s ease-in-out infinite;
+        }
+        .puppet .head {
+            width: 34px; height: 34px; border-radius: 50%; background: #ffd9b3; border: 2px solid #814a2b;
+            box-shadow: inset 0 -6px 10px rgba(0,0,0,0.08);
+        }
+        .puppet .body {
+            width: 8px; height: 46px; background: #35261f; margin-top: 6px; border-radius: 4px;
+        }
+        .puppet .leg { width: 6px; height: 36px; background: #35261f; margin-top: 6px; border-radius: 4px; }
+        .puppet .strings { position: absolute; top: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* 각 인형의 시간차 */
+        .puppet.delay-0 { animation-delay: 0s; }
+        .puppet.delay-1 { animation-delay: 0.12s; }
+        .puppet.delay-2 { animation-delay: 0.24s; }
+
+        @keyframes puppetDance {
+            0%   { transform: translateY(0) rotate(0deg); }
+            25%  { transform: translateY(-10px) rotate(8deg); }
+            50%  { transform: translateY(0) rotate(0deg); }
+            75%  { transform: translateY(-8px) rotate(-8deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+
+        /* 레벨업 때 잠깐 보여줄 텍스트 애니메이션 */
+        .level-label.show { animation: pop 600ms ease forwards; }
+        @keyframes pop {
+            0%   { transform: translate(-50%, -10%) scale(0.7); opacity: 0; }
+            60%  { transform: translate(-50%, 0%) scale(1.05); opacity: 1; }
+            100% { transform: translate(-50%, 0%) scale(1); }
+        }
+
+    </style>
 </head>
 <body>
-<canvas id="tetris" width="240" height="400"></canvas>
-<div id="levelDisplay">Level: 0</div>
-<div id="curtain"></div>
-<script>
-const canvas = document.getElementById('tetris');
-const context = canvas.getContext('2d');
-context.scale(20, 20);
+    <h1>테트리스</h1>
+    <div class="container">
+        <canvas id="tetris" width="240" height="400"></canvas>
+        <div class="side-panel">
+            <h2>다음 블록</h2>
+            <canvas id="next" width="80" height="80"></canvas>
+            <h2>점수</h2>
+            <div id="score">0</div>
+            <h2>레벨</h2>
+            <div id="level">0</div>
+        </div>
+    </div>
 
-let dropCounter = 0;
-let dropInterval = 1000;
-let lastTime = 0;
-let linesCleared = 0;
-let level = 0;
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('next');
+        const nextContext = nextCanvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
 
-const board = createMatrix(12, 20);
-const player = {
-    pos: {x: 0, y: 0},
-    matrix: null,
-    score: 0,
-};
+        const ROWS = 20;
+        const COLS = 12;
+        const BLOCK_SIZE = 20;
 
-function createMatrix(w, h) {
-    const matrix = [];
-    while (h--) {
-        matrix.push(new Array(w).fill(0));
-    }
-    return matrix;
-}
+        context.scale(BLOCK_SIZE, BLOCK_SIZE);
+        nextContext.scale(BLOCK_SIZE, BLOCK_SIZE);
 
-function arenaSweep() {
-    let clearedThisTurn = 0;
-    let rowCount = 1;
-    outer: for (let y = board.length - 1; y >= 0; --y) {
-        if (board[y].every(value => value !== 0)) {
-            const row = board.splice(y, 1)[0].fill(0);
-            board.unshift(row);
-            y++;
-            clearedThisTurn++;
-            player.score += rowCount * 10;
-            rowCount *= 2;
+        const TETROMINOS = {
+            'T': [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+            'O': [[2, 2], [2, 2]],
+            'L': [[0, 3, 0], [0, 3, 0], [0, 3, 3]],
+            'J': [[0, 4, 0], [0, 4, 0], [4, 4, 0]],
+            'I': [[0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0]],
+            'S': [[0, 6, 6], [6, 6, 0], [0, 0, 0]],
+            'Z': [[7, 7, 0], [0, 7, 7], [0, 0, 0]]
+        };
+
+        const COLORS = [
+            null, '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'
+        ];
+
+        let board = createBoard();
+        let player = { pos: { x: 0, y: 0 }, matrix: null, score: 0 };
+        let nextPiece = null;
+        let linesCleared = 0;
+        let level = 0;
+        let isAnimating = false; // 레벨업 연출 중인지
+
+        function createBoard() {
+            return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
         }
-    }
-    if (clearedThisTurn > 0) {
-        const prevLevel = Math.floor(linesCleared / 10);
-        linesCleared += clearedThisTurn;
-        const newLevel = Math.floor(linesCleared / 10);
-        if (newLevel > prevLevel) {
-            const levelsUp = newLevel - prevLevel;
-            for (let i = 0; i < levelsUp; i++) {
-                dropInterval *= 0.95;
-                level++;
-                showLevelUpDance(level);
+
+        function createPiece() {
+            const types = ['T','O','L','J','I','S','Z'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            return TETROMINOS[type];
+        }
+
+        function playerReset() {
+            player.matrix = nextPiece;
+            nextPiece = createPiece();
+            player.pos.y = 0;
+            player.pos.x = (COLS / 2 | 0) - (player.matrix[0].length / 2 | 0);
+
+            if (collide(board, player)) {
+                board.forEach(row => row.fill(0));
+                player.score = 0;
+                linesCleared = 0;
+                level = 0;
+                dropInterval = 1000;
+                updateScore();
+                updateLevel();
+                alert('게임 오버!');
             }
         }
-        document.getElementById('levelDisplay').textContent = 'Level: ' + level;
-    }
-}
 
-function showLevelUpDance(levelNum) {
-    const curtain = document.getElementById('curtain');
-    curtain.innerHTML = '<div>Level ' + levelNum + '!</div>';
-    curtain.style.display = 'block';
-    setTimeout(() => {
-        curtain.innerHTML = '<div class="puppet"></div><div class="puppet"></div><div class="puppet"></div>';
-    }, 1000);
-    setTimeout(() => {
-        curtain.style.display = 'none';
-    }, 6000);
-}
+        function draw() {
+            context.fillStyle = '#000';
+            context.fillRect(0, 0, canvas.width, canvas.height);
 
-function collide(board, player) {
-    const m = player.matrix;
-    const o = player.pos;
-    for (let y = 0; y < m.length; ++y) {
-        for (let x = 0; x < m[y].length; ++x) {
-            if (m[y][x] !== 0 && (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
-                return true;
+            drawMatrix(board, { x: 0, y: 0 });
+            if (player.matrix) drawMatrix(player.matrix, player.pos);
+            drawNextPiece();
+        }
+
+        function drawMatrix(matrix, offset) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        context.fillStyle = COLORS[value];
+                        context.fillRect(x + offset.x, y + offset.y, 1, 1);
+                    }
+                });
+            });
+        }
+
+        function drawNextPiece() {
+            nextContext.fillStyle = '#000';
+            nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+            const matrix = nextPiece;
+            const x = (nextCanvas.width / BLOCK_SIZE / 2 | 0) - (matrix[0].length / 2 | 0);
+            const y = (nextCanvas.height / BLOCK_SIZE / 2 | 0) - (matrix.length / 2 | 0);
+            drawMatrixOnNext(matrix, { x: x, y: y });
+        }
+
+        function drawMatrixOnNext(matrix, offset) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        nextContext.fillStyle = COLORS[value];
+                        nextContext.fillRect(x + offset.x, y + offset.y, 1, 1);
+                    }
+                });
+            });
+        }
+
+        function merge(board, player) {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        board[y + player.pos.y][x + player.pos.x] = value;
+                    }
+                });
+            });
+        }
+
+        function collide(board, player) {
+            const [matrix, offset] = [player.matrix, player.pos];
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < matrix[y].length; ++x) {
+                    if (matrix[y][x] !== 0 && (board[y + offset.y] && board[y + offset.y][x + offset.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function playerDrop() {
+            if (isAnimating) return; // 연출 중엔 낙하 금지
+            player.pos.y++;
+            if (collide(board, player)) {
+                player.pos.y--;
+                merge(board, player);
+                arenaSweep();
+                playerReset();
+                updateScore();
+            }
+            dropCounter = 0;
+        }
+
+        function playerHardDrop() {
+            if (isAnimating) return;
+            while (!collide(board, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge(board, player);
+            arenaSweep();
+            playerReset();
+            updateScore();
+        }
+
+        function playerMove(dir) {
+            if (isAnimating) return;
+            player.pos.x += dir;
+            if (collide(board, player)) {
+                player.pos.x -= dir;
             }
         }
-    }
-    return false;
-}
 
-function createPiece(type) {
-    if (type === 'T') {
-        return [
-            [0, 0, 0],
-            [1, 1, 1],
-            [0, 1, 0],
-        ];
-    } else if (type === 'O') {
-        return [
-            [2, 2],
-            [2, 2],
-        ];
-    } else if (type === 'L') {
-        return [
-            [0, 3, 0],
-            [0, 3, 0],
-            [0, 3, 3],
-        ];
-    } else if (type === 'J') {
-        return [
-            [0, 4, 0],
-            [0, 4, 0],
-            [4, 4, 0],
-        ];
-    } else if (type === 'I') {
-        return [
-            [0, 5, 0, 0],
-            [0, 5, 0, 0],
-            [0, 5, 0, 0],
-            [0, 5, 0, 0],
-        ];
-    } else if (type === 'S') {
-        return [
-            [0, 6, 6],
-            [6, 6, 0],
-            [0, 0, 0],
-        ];
-    } else if (type === 'Z') {
-        return [
-            [7, 7, 0],
-            [0, 7, 7],
-            [0, 0, 0],
-        ];
-    }
-}
+        function rotate(matrix, dir) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
 
-function drawMatrix(matrix, offset) {
-    matrix.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if (value !== 0) {
-                context.fillStyle = 'red';
-                context.fillRect(x + offset.x, y + offset.y, 1, 1);
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function playerRotate(dir) {
+            if (isAnimating) return;
+            const pos = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, dir);
+            while (collide(board, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -dir);
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+        }
+
+        function arenaSweep() {
+            let clearedThisTurn = 0;
+            let rowCount = 1;
+            for (let y = board.length - 1; y >= 0; --y) {
+                if (board[y].every(value => value !== 0)) {
+                    const row = board.splice(y, 1)[0].fill(0);
+                    board.unshift(row);
+                    y++;
+                    clearedThisTurn++;
+                    player.score += rowCount * 10;
+                    rowCount *= 2;
+                }
+            }
+
+            if (clearedThisTurn > 0) {
+                const prevLevel = Math.floor(linesCleared / 10);
+                linesCleared += clearedThisTurn;
+                const newLevel = Math.floor(linesCleared / 10);
+
+                if (newLevel > prevLevel) {
+                    const levelsUp = newLevel - prevLevel;
+                    // 속도 즉시 적용
+                    for (let i = 0; i < levelsUp; i++) {
+                        dropInterval *= 0.95;
+                    }
+                    // 레벨 연출은 순차적으로 재생
+                    (async () => {
+                        for (let i = 1; i <= levelsUp; i++) {
+                            level = prevLevel + i;
+                            updateLevel();
+                            await showLevelUpDance(level);
+                        }
+                    })();
+                }
+            }
+        }
+
+        function updateScore() {
+            scoreElement.innerText = player.score;
+        }
+
+        function updateLevel() {
+            levelElement.innerText = level;
+        }
+
+        let dropCounter = 0;
+        let dropInterval = 1000;
+        let lastTime = 0;
+
+        function update(time = 0) {
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            if (!isAnimating) {
+                dropCounter += deltaTime;
+                if (dropCounter > dropInterval) {
+                    playerDrop();
+                }
+            }
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        document.addEventListener('keydown', event => {
+            if (isAnimating) return; // 연출 중 입력 무시
+            if (event.key === 'ArrowLeft') {
+                playerMove(-1);
+            } else if (event.key === 'ArrowRight') {
+                playerMove(1);
+            } else if (event.key === 'ArrowDown') {
+                playerDrop();
+            } else if (event.key === ' ' || event.code === 'Space') {
+                event.preventDefault();
+                playerHardDrop();
+            } else if (event.key === 'q' || event.key === 'Q') {
+                playerRotate(-1);
+            } else if (event.key === 'w' || event.key === 'W' || event.key === 'ArrowUp') {
+                playerRotate(1);
             }
         });
-    });
-}
 
-function draw() {
-    context.fillStyle = '#000';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    drawMatrix(board, {x:0, y:0});
-    drawMatrix(player.matrix, player.pos);
-}
+        // 레벨업 연출 — 커튼 열고 3개의 꼭두각시가 5초간 춤추고 닫힘
+        function showLevelUpDance(lv) {
+            return new Promise(resolve => {
+                if (isAnimating) {
+                    // 이미 연출 중이면 바로 resolve
+                    resolve();
+                    return;
+                }
+                isAnimating = true;
 
-function merge(board, player) {
-    player.matrix.forEach((row, y) => {
-        row.forEach((value, x) => {
-            if (value !== 0) {
-                board[y + player.pos.y][x + player.pos.x] = value;
-            }
-        });
-    });
-}
+                // 오버레이 생성
+                const rect = canvas.getBoundingClientRect();
+                const overlay = document.createElement('div');
+                overlay.className = 'overlay';
+                overlay.style.left = (rect.left + window.scrollX) + 'px';
+                overlay.style.top  = (rect.top + window.scrollY) + 'px';
+                overlay.style.width = rect.width + 'px';
+                overlay.style.height = rect.height + 'px';
+                overlay.style.display = 'block';
 
-function playerDrop() {
-    player.pos.y++;
-    if (collide(board, player)) {
-        player.pos.y--;
-        merge(board, player);
+                // 커튼
+                const leftCurtain = document.createElement('div');
+                leftCurtain.className = 'curtain left';
+                const rightCurtain = document.createElement('div');
+                rightCurtain.className = 'curtain right';
+
+                // 레벨 라벨
+                const label = document.createElement('div');
+                label.className = 'level-label';
+                label.innerText = '레벨 ' + lv + '!';
+
+                overlay.appendChild(leftCurtain);
+                overlay.appendChild(rightCurtain);
+                overlay.appendChild(label);
+                document.body.appendChild(overlay);
+
+                // 열림 애니메이션 시작 (커튼이 좌우로 열린다)
+                // 짧은 딜레이로 transition이 잘 동작하도록 함
+                requestAnimationFrame(() => {
+                    leftCurtain.classList.add('open');
+                    rightCurtain.classList.add('open');
+                    label.classList.add('show');
+                });
+
+                // 열린 뒤 인형 등장
+                const openDuration = 650; // ms (커튼이 완전히 열리는 시간)
+                const danceDuration = 5000; // ms (인형이 춤추는 시간)
+
+                setTimeout(() => {
+                    const puppetWrap = document.createElement('div');
+                    puppetWrap.className = 'puppet-container';
+
+                    for (let i = 0; i < 3; i++) {
+                        const p = document.createElement('div');
+                        p.className = 'puppet delay-' + i;
+
+                        // 간단한 꼭두각시 구조: head/body/leg
+                        const head = document.createElement('div'); head.className = 'head';
+                        const body = document.createElement('div'); body.className = 'body';
+                        const leg = document.createElement('div'); leg.className = 'leg';
+
+                        // strings (시각적 효과)
+                        const strings = document.createElement('div'); strings.className = 'strings';
+
+                        p.appendChild(strings);
+                        p.appendChild(head);
+                        p.appendChild(body);
+                        p.appendChild(leg);
+                        puppetWrap.appendChild(p);
+                    }
+
+                    overlay.appendChild(puppetWrap);
+
+                    // 인형 춤이 끝나면 커튼 닫기
+                    setTimeout(() => {
+                        // 닫히는 애니메이션
+                        leftCurtain.classList.remove('open');
+                        rightCurtain.classList.remove('open');
+                        label.classList.remove('show');
+
+                        // transition 끝나면 오버레이 제거
+                        setTimeout(() => {
+                            if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                            isAnimating = false;
+                            resolve();
+                        }, 700);
+                    }, danceDuration);
+
+                }, openDuration);
+            });
+        }
+
+        // 초기값 설정 및 게임 루프 시작
+        nextPiece = createPiece();
         playerReset();
-        arenaSweep();
-    }
-    dropCounter = 0;
-}
+        updateScore();
+        updateLevel();
+        update();
 
-function playerMove(dir) {
-    player.pos.x += dir;
-    if (collide(board, player)) {
-        player.pos.x -= dir;
-    }
-}
-
-function playerReset() {
-    const pieces = 'TJLOSZI';
-    player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
-    player.pos.y = 0;
-    player.pos.x = (board[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
-    if (collide(board, player)) {
-        board.forEach(row => row.fill(0));
-        player.score = 0;
-        linesCleared = 0;
-        level = 0;
-        dropInterval = 1000;
-    }
-}
-
-function update(time = 0) {
-    const deltaTime = time - lastTime;
-    lastTime = time;
-    dropCounter += deltaTime;
-    if (dropCounter > dropInterval) {
-        playerDrop();
-    }
-    draw();
-    requestAnimationFrame(update);
-}
-
-document.addEventListener('keydown', event => {
-    if (event.keyCode === 37) {
-        playerMove(-1);
-    } else if (event.keyCode === 39) {
-        playerMove(1);
-    } else if (event.keyCode === 40) {
-        playerDrop();
-    }
-});
-
-playerReset();
-update();
-</script>
+        // 디버그용: 콘솔에서 showLevelUpDance(1)를 호출하면 연출 확인 가능
+    </script>
 </body>
 </html>
